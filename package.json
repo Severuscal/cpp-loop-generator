@@ -1,0 +1,62 @@
+{
+  "name": "cpp-loop-generator",
+  "displayName": "C++ Loop Generator",
+  "description": "Генерирует блоки for и while на основе анализа выделенного C++ кода",
+  "version": "0.1.0",
+  "publisher": "your-publisher-name",
+  "author": {
+    "name": "Фамилия Имя",
+    "email": "you@example.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/cpp-loop-generator.git"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other", "Programming Languages"],
+  "keywords": ["c++", "cpp", "loop", "for", "while", "code generator"],
+  "activationEvents": [
+    "onCommand:cppLoopGenerator.wrapInFor",
+    "onCommand:cppLoopGenerator.wrapInWhile",
+    "onLanguage:cpp"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cppLoopGenerator.wrapInFor",
+        "title": "C++: Обернуть в for (анализ кода)"
+      },
+      {
+        "command": "cppLoopGenerator.wrapInWhile",
+        "title": "C++: Обернуть в while (анализ кода)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "cppLoopGenerator.wrapInFor",
+          "when": "editorLangId == cpp && editorHasSelection",
+          "group": "navigation"
+        },
+        {
+          "command": "cppLoopGenerator.wrapInWhile",
+          "when": "editorLangId == cpp && editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
