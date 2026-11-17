@@ -1,71 +1,79 @@
-# for-while-gen README
+## Авторство / Назначение
 
-This is the README for your extension "for-while-gen". After writing up a brief description, we recommend including the following sections.
+Масленников Алексей Павлович - M3118
 
-## Features
+Расширение для Visual Studio Code, которое **обёртывает выделенный фрагмент C++ кода в блок `for` или `while`**, предварительно **анализируя** содержимое выделения и подбирая подходящий вариант цикла.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## Платформа
 
-For example if there is an image subfolder under your extension project workspace:
+IDE - Visual Studio Code 
+Минимальная версия IDE - 1.80.0 
+Язык реализации -TypeScript 
+Поддерживаемый язык - C++ 
 
-\!\[feature X\]\(images/feature-x.png\)
+## Команды
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Расширение регистрирует две команды:
 
-## Requirements
+ Обернуть в `for` - `cppLoopGenerator.wrapInFor` - `C++: Обернуть в for (анализ кода)` 
+ Обернуть в `while` - `cppLoopGenerator.wrapInWhile` - `C++: Обернуть в while (анализ кода)` 
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+Обе команды добавляются в **контекстное меню редактора** и доступны только при выполнении условий:
 
-## Extension Settings
+- активный редактор — файл C++ (`editorLangId == cpp`);
+- есть выделение (`editorHasSelection`).
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## Анализ выделенного текста
 
-For example:
+Плагин извлекает из выделения три категории сущностей:
 
-This extension contributes the following settings:
+1. **Обращения к массиву** — `arr[i]`, `vec[idx]` (имя массива и индекс сохраняются).
+2. **Условия в `if (...)` / `while (...)`** — извлекается текст условия.
+3. **«Голые» условия** без обёртки — сравнения вида `count < 10`, `i != n`, `x == 0`.
+4. **Отдельные идентификаторы** (переменные) — используются как fallback, **только если** ни одна из предыдущих категорий не найдена.
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## Генерация вариантов циклов
 
-## Known Issues
+Для каждой извлечённой сущности плагин формирует один или несколько вариантов цикла. Каждый вариант описывается структурой со следующими полями:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- тип цикла (`for` / `while`);
+- готовый заголовок (без тела);
+- человекочитаемое описание;
+- **приоритет** — числовой вес для сортировки.
 
-## Release Notes
+Минимальный набор правил:
 
-Users appreciate release notes as you update your extension.
+| Сущность | Генерируемые варианты | Приоритет |
+|---|---|---|
+| `arrayAccess` | `for` по индексу | 10 |
+| `arrayAccess` | `for` range-based | 5 |
+| `arrayAccess` | `while` по индексу (с подсказкой про инкремент) | 3 |
+| `condition` | `while` с тем же условием | 8 |
+| `condition` (если сравнение `var OP bound`) | `for` со счётчиком `var` | 4 |
+| `variable` | `for` с переменной как счётчиком | 1 |
 
-### 1.0.0
+## Гарантированный fallback
 
-Initial release of ...
+Независимо от результатов анализа, в список вариантов **всегда** добавляются два стандартных каркаса:
 
-### 1.0.1
+| Заголовок | Описание | Приоритет |
+|---|---|---|
+| `for (int i = 0; i < N; ++i)` | «Стандартный for (замените N на нужное значение)» | 0 |
+| `while (condition)` | «Стандартный while (замените condition)» | 0 |
 
-Fixed issue #.
+Это гарантирует, что после фильтрации по запрошенному типу список **никогда не окажется пустым**, и пользователь не получит цикл другого типа из-за «тихого отката».
 
-### 1.1.0
+## Выбор варианта
 
-Added features X, Y, and Z.
+- Если после фильтрации по запрошенному типу остался **один** вариант — он применяется сразу.
+- Если вариантов **несколько** — показывается `QuickPick` с заголовком, описанием и типом цикла; применяется выбранный пользователем.
+- Отмена `QuickPick` (Esc) — операция прерывается, документ не изменяется.
 
----
+## Формирование и вставка кода
 
-## Following extension guidelines
+Итоговый блок оформляется как:
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+```cpp
+<header> {
+<тело с дополнительным отступом>
+<отступ исходной строки>}
