@@ -26,8 +26,9 @@ export function activate(context: vscode.ExtensionContext) {
  * 1. Получает активный редактор и выделение.
  * 2. Извлекает сущности из текста.
  * 3. Строит и ранжирует предложения.
- * 4. При необходимости показывает QuickPick.
- * 5. Форматирует и вставляет итоговый блок.
+ * 4. Фильтрует по запрошенному типу цикла.
+ * 5. При необходимости показывает QuickPick.
+ * 6. Форматирует и вставляет итоговый блок.
  *
  * @param preferredType Тип цикла, инициированный пользователем.
  */
@@ -48,8 +49,10 @@ async function wrapSelection(preferredType: 'for' | 'while') {
     const entities = extractEntities(selectedText);
     const suggestions = generateSuggestions(entities);
 
-    const filtered = suggestions.filter(s => s.loopType === preferredType);
-    const finalSuggestions = filtered.length > 0 ? filtered : suggestions;
+    // Фильтруем строго по запрошенному типу. Благодаря fallback-каркасам
+    // из generateSuggestions массив finalSuggestions никогда не окажется
+    // пустым, поэтому подмены типа не происходит.
+    const finalSuggestions = suggestions.filter(s => s.loopType === preferredType);
 
     let chosen: LoopSuggestion;
     if (finalSuggestions.length === 1) {

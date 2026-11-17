@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 export class CodeEntity {
     /**
      * @param kind      Тип сущности ('arrayAccess' | 'condition' | 'variable').
-     * @param name      Имя сущности (имя массива, условие, имя переменной).
+     * @param name      Имя сущности (имя массива, текст условия, имя переменной).
      * @param index     Индекс для обращения к массиву (опционально).
      * @param rawText   Исходный текст совпадения (для отладки).
      */
@@ -65,7 +65,15 @@ export function extractEntities(text: string): CodeEntity[] {
         entities.push(new CodeEntity('condition', match[1].trim(), undefined, match[0]));
     }
 
-    // 3. Если ничего не найдено — извлекаем идентификаторы
+    // 2.5. «Голое» условие без обёртки if/while — например "count < 10",
+    //      "i != n", "x == 0". Полезно, когда пользователь просто выделил
+    //      выражение и хочет превратить его в заголовок цикла.
+    const bareConditionRegex = /([a-zA-Z_]\w*\s*(?:<=|>=|==|!=|<|>)\s*[\w'".\d]+)/g;
+    while ((match = bareConditionRegex.exec(text)) !== null) {
+        entities.push(new CodeEntity('condition', match[1].trim(), undefined, match[0]));
+    }
+
+    // 3. Только если вообще ничего не нашли — извлекаем идентификаторы
     if (entities.length === 0) {
         const varRegex = /\b([a-zA-Z_]\w*)\b/g;
         const seen = new Set<string>();
@@ -89,6 +97,12 @@ export function extractEntities(text: string): CodeEntity[] {
  * В конце массив сортируется по убыванию приоритета, чтобы более
  * релевантный вариант оказался первым.
  *
+ * ВАЖНО: в конце всегда добавляются стандартные каркасы обоих типов
+ * (`for` и `while`) с минимальным приоритетом. Это гарантирует, что
+ * при фильтрации по запрошенному типу (см. wrapSelection) массив
+ * никогда не окажется пустым, и пользователь не получит цикл другого
+ * типа из-за «тихого отката».
+ *
  * @param entities Массив сущностей из {@link extractEntities}.
  * @returns        Отсортированный массив предложений.
  */
@@ -97,43 +111,87 @@ export function generateSuggestions(entities: CodeEntity[]): LoopSuggestion[] {
 
     for (const entity of entities) {
         if (entity.kind === 'arrayAccess' && entity.index) {
+            // for по индексу массива
             suggestions.push(new LoopSuggestion(
                 'for',
                 `for (size_t ${entity.index} = 0; ${entity.index} < ${entity.name}.size(); ++${entity.index})`,
                 `Итерация по ${entity.name} с индексом ${entity.index}`,
                 10
             ));
+            // range-based for
             suggestions.push(new LoopSuggestion(
                 'for',
                 `for (const auto& item : ${entity.name})`,
                 `Range-based for по ${entity.name}`,
                 5
             ));
+            // while по индексу — с явной подсказкой про инкремент
+            suggestions.push(new LoopSuggestion(
+                'while',
+                `while (${entity.index} < ${entity.name}.size())`,
+                `while по индексу ${entity.index} — не забудьте ${entity.index}++ внутри`,
+                3
+            ));
         }
 
         if (entity.kind === 'condition') {
+            // while с тем же условием
             suggestions.push(new LoopSuggestion(
                 'while',
                 `while (${entity.name})`,
                 `Повторять, пока выполняется условие «${entity.name}»`,
                 8
             ));
+
+            // Пытаемся распознать сравнение вида "var OP bound" и собрать for
+            const cmp = entity.name.match(
+                /^\s*([a-zA-Z_]\w*)\s*(<=|>=|<|>|==|!=)\s*(.+?)\s*$/
+            );
+            if (cmp) {
+                const lhs = cmp[1];
+                const op = cmp[2];
+                const rhs = cmp[3];
+                const step = (op === '>' || op === '>=') ? `--${lhs}` : `++${lhs}`;
+                const cond = (op === '==' || op === '!=')
+                    ? `${lhs} ${op} ${rhs}`
+                    : `${lhs} < ${rhs}`;
+                suggestions.push(new LoopSuggestion(
+                    'for',
+                    `for (int ${lhs} = 0; ${cond}; ${step})`,
+                    `Счётчик ${lhs} до ${rhs} (проверьте начальное значение и знак)`,
+                    4
+                ));
+            }
         }
 
         if (entity.kind === 'variable') {
+            // for с переменной как счётчиком
             suggestions.push(new LoopSuggestion(
                 'for',
                 `for (int ${entity.name} = 0; ${entity.name} < N; ++${entity.name})`,
-                `Использовать ${entity.name} как счётчик (замените N)`,
+                `Использовать ${entity.name} как счётчик (замените N на нужное значение)`,
                 1
             ));
         }
     }
 
-    if (suggestions.length === 0) {
-        suggestions.push(new LoopSuggestion('for', 'for (int i = 0; i < N; ++i)', 'Стандартный for', 0));
-        suggestions.push(new LoopSuggestion('while', 'while (condition)', 'Стандартный while', 0));
-    }
+    // Всегда добавляем стандартные каркасы обоих типов с минимальным
+    // приоритетом. Это гарантирует, что при фильтрации по запрошенному
+    // типу (for/while) в wrapSelection всегда будет хотя бы один вариант,
+    // и не возникнет ситуации, когда пользователь просит while, а
+    // подставляется for (или наоборот).
+    suggestions.push(new LoopSuggestion(
+        'for',
+        'for (int i = 0; i < N; ++i)',
+        'Стандартный for (замените N на нужное значение)',
+        0
+    ));
+    suggestions.push(new LoopSuggestion(
+        'while',
+        'while (condition)',
+        'Стандартный while (замените condition)',
+        0
+    ));
 
     return suggestions.sort((a, b) => b.priority - a.priority);
 }
