@@ -15,7 +15,8 @@ IDE - Visual Studio Code
 
 Расширение регистрирует две команды:
 
- Обернуть в `for` - `cppLoopGenerator.wrapInFor` - `C++: Обернуть в for (анализ кода)` 
+ Обернуть в `for` - `cppLoopGenerator.wrapInFor` - `C++: Обернуть в for (анализ кода)`
+  
  Обернуть в `while` - `cppLoopGenerator.wrapInWhile` - `C++: Обернуть в while (анализ кода)` 
 
 Обе команды добавляются в **контекстное меню редактора** и доступны только при выполнении условий:
